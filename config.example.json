@@ -1,0 +1,13 @@
+{
+  "session_key": "",
+  "api_base_url": "https://cloud-api.suunto.cn/apiserver/v1",
+  "output": {
+    "fit_dir": "./data/fit",
+    "json_dir": "./data/json"
+  },
+  "sync": {
+    "page_size": 200,
+    "download_delay": 0.3,
+    "validate_fit": true
+  }
+}
