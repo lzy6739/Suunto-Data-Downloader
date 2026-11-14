@@ -212,3 +212,28 @@ cp config.example.json config.json
 ## 许可证
 
 [MIT License](LICENSE)
+
+
+## 全天候健康数据下载 (Health Data)
+
+除运动记录外，本工具现已支持下载全天候健康数据（心率、步数、卡路里、身体电量、压力、睡眠总览与分期、夜间高频 HRV）：
+
+### 1. 同步健康数据
+```bash
+# 全量同步所有大类（首次使用）
+python3 suunto_health_sync.py --full
+
+# 增量同步（日常使用，仅拉取新记录）
+python3 suunto_health_sync.py
+
+# 仅同步指定大类
+python3 suunto_health_sync.py --category sleep
+python3 suunto_health_sync.py --category activity
+```
+数据保存在 `data/health/{类别}/{YYYY-MM}.ndjson`，与 Suunto 国际区官方 GDPR 导出格式完全一致。
+
+### 2. 一键转换为 CSV 表格
+```bash
+python3 convert_ndjson.py -i data/health -o data/health_csv
+```
+工具会自动进行物理量换算（心率 Hz 转 bpm，能量焦耳转千卡，睡眠秒数转小时），生成的 CSV 位于 `data/health_csv/`。

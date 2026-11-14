@@ -172,3 +172,111 @@ GET /workouts/{workoutKey}/ultimatemanager
 **APK 包名：** `com.stt.android.suunto.china`
 
 **数据库位置：** `/data/data/com.stt.android.suunto.china/databases/amer_app.db`
+
+## 全天候健康数据 API (Asko Timeline)
+
+Suunto 中国版 APP 采用代号为 **Asko Timeline** 的专用云端服务同步日常健康数据。
+
+| 项目 | 值 |
+|------|-----|
+| 中国版 Base URL | `https://247.suunto-operations.cn` |
+| 国际版 Base URL | `https://247.sports-tracker.com` |
+| 认证方式 | HTTP 自定义头 `STTAuthorization: <sessionKey>`（与运动 API 一致） |
+| 数据传输格式 | `application/x-ndjson`（换行符分隔的 JSON，流式传输） |
+
+### 流式导出端点 (Streaming Export)
+
+所有端点均支持查询参数 `?since={timestamp_ms}`。当 `since=0` 或省略时，服务端将从第一条记录开始下发全量历史数据。
+
+#### 1. 日常活动与心率 (Activity)
+
+```
+GET /v1/activity/export?since={timestamp}
+```
+
+- **采样周期**：每 10 分钟一条记录。
+- **单条格式**：
+  ```json
+  {"timestamp":"2024-09-13T19:40:00.010+08:00","entryData":{"hr":1.1833333,"stepCount":0,"energyConsumption":0.0}}
+  ```
+- **字段定义**：
+  - `hr`：心率，**单位为 Hz**（赫兹）。转换为标准心率（bpm）公式：`bpm = round(hr * 60, 1)`（例如 `1.1833333` ≈ 71 bpm）。
+  - `stepCount`：该 10 分钟区间内的累计步数。
+  - `energyConsumption`：活动能量消耗，单位为**焦耳（J）**。换算千卡公式：`kcal = round(energyConsumption / 4184.0, 2)`。
+
+#### 2. 身体资源与压力 (Recovery / Balance)
+
+```
+GET /v1/recovery/export?since={timestamp}
+```
+
+- **单条格式**：
+  ```json
+  {"timestamp":"2024-09-13T19:30:00.000+08:00","entryData":{"balance":0.69,"stressState":2}}
+  ```
+- **字段定义**：
+  - `balance`：身体电量 / 资源（0.0 ~ 1.0 浮点数，`0.69` 表示 69%）。
+  - `stressState`：压力状态枚举（1=恢复中, 2=低压力, 3=高压力等）。
+
+#### 3. 每日睡眠概览 (Sleep)
+
+```
+GET /v1/sleep/export?since={timestamp}
+```
+
+- **单条格式**：
+  ```json
+  {"timestamp":"2024-09-13T22:49:10.210+08:00","entryData":{"deepSleepDuration":4091.0,"duration":26649.0,"hrAvg":0.8,"hrMin":0.73333335,"quality":0.96,"avgHrv":51.0,"avgHrvSampleCount":84}}
+  ```
+- **字段定义**：
+  - `duration`：睡眠总时长（秒）。
+  - `deepSleepDuration`：深睡时长（秒）。
+  - `quality`：睡眠质量得分（0.0 ~ 1.0）。
+  - `hrAvg` / `hrMin`：睡眠平均与最低心率（Hz，乘以 60 即为 bpm）。
+  - `avgHrv`：整夜平均 HRV（毫秒）。
+  - `avgHrvSampleCount`：HRV 采样样本数。
+
+#### 4. 睡眠分期明细 (Sleep Stages)
+
+```
+GET /v1/sleepstages/export?since={timestamp}
+```
+
+- **单条格式**：
+  ```json
+  {"timestamp":"2025-10-01T16:48:00.000+00:00","entryData":{"stage":"LIGHT","duration":1440.0}}
+  ```
+- **字段定义**：
+  - `stage`：分期类型（`LIGHT` 浅睡、`DEEP` 深睡、`REM` 快速眼动、`AWAKE` 清醒）。
+  - `duration`：本分期持续时长（秒）。
+
+#### 5. 睡眠夜间高频 HRV (Sleep HRV Samples)
+
+```
+GET /v1/sleephrvsamples/export?since={timestamp}
+```
+
+- 提供整夜毫秒级连续 HRV 采样序列。
+
+---
+
+## 本地 SQLite 数据库结构 (amer_app.db)
+
+位于 `/data/data/com.stt.android.suunto.china/databases/amer_app.db`，由 Jetpack Room 维护：
+
+| 表名 | 对应实体 | 说明 |
+|------|---------|------|
+| `sleepsegments` | `LocalSleepSegment` | 睡眠总览（含 25 项详细指标：spo2、avg_hrv、bedtime等） |
+| `sleep_stage_intervals` | `LocalSleepStageInterval` | 睡眠分期时间片 |
+| `sleep_hrv_samples` | `LocalSleepHrvSample` | 睡眠 HRV 采样 |
+| `recoverydata` | `LocalRecoveryData` | 身体电量与压力状态 |
+| `user` | `User` | 包含 `session` 字段（内含 `sessionKey`） |
+
+## 逆向来源补充
+
+| 类名 / 文件 | 功能 |
+|------------|------|
+| `AskoTimelineRestApi` | Retrofit 接口：定义了 `streamActivityData`、`streamRecoveryData`、`streamSleepData`、`streamSleepStagesData`、`streamSleepHrvSamplesData` |
+| `AskoTimelineStreamsKt` | 流式 NDJSON 解析逻辑 |
+| `BaseUrlConfiguration` | 环境配置表：包含 `PROD_CHINA` 下的 `https://247.suunto-operations.cn` 基址 |
+| `SleepModule` | 注入 AskoTimelineRestApi 及 Room 数据访问对象 (DAO) |
