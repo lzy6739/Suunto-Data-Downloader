@@ -111,6 +111,61 @@ def convert_sleep(files, out_csv):
         print(f"[+] 转换完成: {out_csv} ({len(rows)} 行记录)")
 
 
+def convert_sleepstages(files, out_csv):
+    rows = []
+    for f in sorted(files):
+        with open(f, "r", encoding="utf-8") as fp:
+            for line in fp:
+                line = line.strip()
+                if not line: continue
+                try:
+                    data = json.loads(line)
+                    ts = data.get("timestamp")
+                    entry = data.get("entryData", {})
+                    stage = entry.get("stage")
+                    dur_s = entry.get("duration", 0)
+                    rows.append({
+                        "timestamp": ts,
+                        "stage": stage,
+                        "duration_minutes": round(dur_s / 60.0, 1) if dur_s else 0,
+                        "duration_seconds": dur_s
+                    })
+                except Exception:
+                    continue
+    if rows:
+        with open(out_csv, "w", newline="", encoding="utf-8-sig") as fp:
+            writer = csv.DictWriter(fp, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"[+] 转换完成: {out_csv} ({len(rows)} 行记录)")
+
+
+def convert_sleephrvsamples(files, out_csv):
+    rows = []
+    for f in sorted(files):
+        with open(f, "r", encoding="utf-8") as fp:
+            for line in fp:
+                line = line.strip()
+                if not line: continue
+                try:
+                    data = json.loads(line)
+                    ts = data.get("timestamp")
+                    entry = data.get("entryData", {})
+                    hrv = entry.get("hrv")
+                    rows.append({
+                        "timestamp": ts,
+                        "hrv_ms": hrv
+                    })
+                except Exception:
+                    continue
+    if rows:
+        with open(out_csv, "w", newline="", encoding="utf-8-sig") as fp:
+            writer = csv.DictWriter(fp, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"[+] 转换完成: {out_csv} ({len(rows)} 行记录)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Suunto NDJSON 转 CSV 工具")
     parser.add_argument("--input", "-i", default="data/health", help="输入健康数据目录 (默认: data/health)")
@@ -131,6 +186,14 @@ def main():
     slp_files = glob.glob(os.path.join(args.input, "sleep", "*.ndjson"))
     if slp_files:
         convert_sleep(slp_files, os.path.join(args.output, "sleep_summary.csv"))
+
+    stage_files = glob.glob(os.path.join(args.input, "sleepstages", "*.ndjson"))
+    if stage_files:
+        convert_sleepstages(stage_files, os.path.join(args.output, "sleep_stages_timeline.csv"))
+
+    hrv_files = glob.glob(os.path.join(args.input, "sleephrvsamples", "*.ndjson"))
+    if hrv_files:
+        convert_sleephrvsamples(hrv_files, os.path.join(args.output, "sleep_hrv_samples.csv"))
 
     print(f"\n[OK] 处理完成，CSV 已输出至: {os.path.abspath(args.output)}")
 
