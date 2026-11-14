@@ -107,7 +107,7 @@ def fetch_all_workouts(base_url, session_key, page_size):
 
 
 def scan_downloaded(fit_dir, json_dir):
-    """扫描已下载的 workoutKey 命名文件（纯字母数字文件名）"""
+    """扫描已下载的 workoutKey 命名文件及已重命名的文件"""
     fit_keys = set()
     json_keys = set()
 
@@ -119,11 +119,32 @@ def scan_downloaded(fit_dir, json_dir):
                     fit_keys.add(name)
 
     if os.path.isdir(json_dir):
-        for f in os.listdir(json_dir):
-            if f.endswith(".json"):
-                name = os.path.splitext(f)[0]
-                if name.isalnum() and name.isascii():
-                    json_keys.add(name)
+        for root, _, files in os.walk(json_dir):
+            for f in files:
+                if f.endswith(".json"):
+                    name = os.path.splitext(f)[0]
+                    if name.isalnum() and name.isascii():
+                        json_keys.add(name)
+
+    # 检查是否有重命名映射表 key_to_name.json
+    for search_dir in (fit_dir, json_dir, Path(fit_dir).parent):
+        mapping_file = os.path.join(search_dir, "key_to_name.json")
+        if os.path.exists(mapping_file):
+            try:
+                with open(mapping_file, "r", encoding="utf-8") as kf:
+                    mapping = json.load(kf)
+                    for wk, info in mapping.items():
+                        name = info.get("name")
+                        year = info.get("year", "")
+                        if name:
+                            if os.path.exists(os.path.join(fit_dir, f"{name}.fit")):
+                                fit_keys.add(wk)
+                            if os.path.exists(os.path.join(json_dir, str(year), f"{name}.json")) or \
+                               os.path.exists(os.path.join(json_dir, f"{name}.json")):
+                                json_keys.add(wk)
+                break
+            except Exception:
+                pass
 
     return fit_keys, json_keys
 
