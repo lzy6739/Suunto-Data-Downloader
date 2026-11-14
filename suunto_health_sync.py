@@ -18,6 +18,7 @@ import sys
 import json
 import time
 import argparse
+import gzip
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -93,8 +94,14 @@ def fetch_stream(base_url, endpoint, session_key, since=0, timeout=120):
     except urllib.error.URLError as e:
         raise RuntimeError(f"网络连接失败: {e.reason}")
 
+    content_encoding = (response.headers.get("Content-Encoding") or "").lower()
+    if content_encoding == "gzip":
+        stream = gzip.GzipFile(fileobj=response)
+    else:
+        stream = response
+
     # 流式迭代行
-    for line in response:
+    for line in stream:
         line_str = line.decode("utf-8", errors="ignore").strip()
         if not line_str:
             continue
@@ -193,7 +200,7 @@ def main():
     base_url = BASE_URL_GLOBAL if args.global_server else cfg_base_url
     
     default_out = cfg.get("output", {}).get("health_dir", "data/health") if isinstance(cfg.get("output"), dict) else "data/health"
-    out_dir = out_dir if out_dir != "data/health" else default_out
+    out_dir = args.output if args.output != "data/health" else default_out
     print("=" * 60)
     print(f"Suunto Health Data Downloader (Asko Timeline API)")
     print(f"服务器: {base_url}")
